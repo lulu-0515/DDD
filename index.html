@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2014～2017 銷售利潤分析</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<style>
+/* ── Reset & Font ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --font:'Noto Sans TC',system-ui,sans-serif;
+  --bg:#eef1f6;
+  --panel:#ffffff;
+  --border:#dde2ea;
+  --text:#1a1e2b;
+  --muted:#7a8299;
+  --blue-dark:#0d47a1;
+  --blue-mid:#1976d2;
+  --blue:#2196f3;
+  --blue-light:#90caf9;
+  --blue-pale:#e3f2fd;
+  --amber:#f59e0b;
+  --teal:#0097a7;
+  --violet:#7c3aed;
+  --neg:#e53935;
+  --pos:#1976d2;
+  --header-bg:#0d1b3e;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:13px;min-height:100vh;}
+
+/* ── KPI HERO BAR ── */
+.kpi-hero{
+  background:linear-gradient(135deg, #0d1b3e 0%, #1565c0 60%, #0288d1 100%);
+  padding:28px 36px 24px;
+  display:flex;align-items:flex-start;justify-content:space-between;gap:32px;
+}
+.kpi-hero-left h1{
+  font-family:var(--font);
+  font-size:22px;font-weight:900;
+  color:#fff;letter-spacing:.02em;
+  margin-bottom:20px;
+  text-shadow:0 2px 8px rgba(0,0,0,.3);
+}
+.kpi-cards{display:flex;gap:20px;flex-wrap:wrap;}
+.kpi-card{
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.22);
+  border-radius:12px;
+  padding:14px 22px;
+  min-width:130px;
+  backdrop-filter:blur(4px);
+  position:relative;
+  overflow:hidden;
+}
+.kpi-card::after{
+  content:'';position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,#64b5f6,#fff);
+  border-radius:12px 12px 0 0;
+}
+.kpi-card-label{
+  font-family:var(--font);
+  font-size:10px;font-weight:500;
+  color:rgba(255,255,255,0.65);
+  text-transform:uppercase;letter-spacing:.1em;
+  margin-bottom:8px;
+}
+.kpi-card-val{
+  font-family:var(--font);
+  font-size:28px;font-weight:900;
+  color:#ffffff;
+  line-height:1;
+  text-shadow:0 2px 10px rgba(0,0,0,.25);
+}
+.kpi-card-sub{
+  font-family:var(--font);
+  font-size:10px;color:rgba(255,255,255,0.5);margin-top:4px;
+}
+
+/* ── Year Filter ── */
+.year-filter-wrap{
+  display:flex;flex-direction:column;gap:2px;align-items:flex-end;
+}
+.year-filter-title{
+  font-family:var(--font);
+  font-size:10px;font-weight:600;color:rgba(255,255,255,0.5);
+  text-transform:uppercase;letter-spacing:.08em;
+  margin-bottom:6px;
+}
+.year-btns{display:flex;flex-direction:column;gap:6px;}
+.yr-btn{
+  font-family:var(--font);
+  display:flex;align-items:center;gap:8px;
+  background:rgba(255,255,255,0.10);
+  border:1.5px solid rgba(255,255,255,0.25);
+  border-radius:8px;
+  padding:7px 16px;
+  color:rgba(255,255,255,0.85);
+  font-size:13px;font-weight:600;
+  cursor:pointer;user-select:none;
+  transition:all .18s;
+  min-width:110px;
+}
+.yr-btn:hover{background:rgba(255,255,255,0.20);}
+.yr-btn.active{
+  background:rgba(255,255,255,0.95);
+  color:#0d47a1;
+  border-color:#fff;
+}
+.yr-btn .yr-check{
+  width:16px;height:16px;border-radius:4px;
+  border:2px solid currentColor;
+  display:flex;align-items:center;justify-content:center;
+  font-size:11px;flex-shrink:0;
+}
+.yr-btn.active .yr-check::after{content:'✓';font-size:10px;font-weight:900;}
+
+/* ── Main Layout ── */
+.main-grid{
+  padding:16px;
+  display:grid;
+  grid-template-columns:300px 1fr 310px;
+  gap:14px;
+}
+.bottom-grid{
+  padding:0 16px 16px;
+  display:grid;
+  grid-template-columns:360px 300px 1fr;
+  gap:14px;
+}
+
+/* ── Panel ── */
+.panel{
+  background:var(--panel);
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+  box-shadow:0 1px 4px rgba(0,0,0,.06);
+}
+.panel-title{
+  font-family:var(--font);
+  font-size:11px;font-weight:700;
+  color:var(--muted);
+  text-transform:uppercase;letter-spacing:.09em;
+  margin-bottom:12px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--border);
+}
+
+/* ── Monthly bars ── */
+#monthlyWrap{overflow-y:auto;max-height:390px;padding-right:4px;}
+#monthlyWrap::-webkit-scrollbar{width:4px;}
+#monthlyWrap::-webkit-scrollbar-thumb{background:#cdd3df;border-radius:2px;}
+.bar-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.bar-label{font-family:var(--font);font-size:9.5px;color:var(--muted);width:54px;text-align:right;flex-shrink:0;font-weight:500;}
+.bar-track{flex:1;height:16px;position:relative;}
+.bar-zero{position:absolute;top:0;bottom:0;width:1px;background:#d0d5df;}
+.bar-fill{height:11px;border-radius:2px;position:absolute;top:2.5px;}
+.bar-val{font-family:var(--font);font-size:9px;position:absolute;white-space:nowrap;top:3px;}
+
+/* ── Map ── */
+.map-legend{display:flex;align-items:center;gap:8px;margin-top:10px;font-family:var(--font);font-size:10px;color:var(--muted);}
+.map-legend-bar{height:10px;flex:1;max-width:160px;border-radius:3px;}
+
+/* ── Scatter ── */
+.scatter-legend{display:flex;gap:14px;margin-bottom:8px;font-family:var(--font);font-size:10px;color:var(--muted);}
+.scatter-legend span{display:flex;align-items:center;gap:4px;}
+.scatter-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+
+/* ── Avg profit KPI cards in bottom ── */
+.avg-kpi-row{display:flex;gap:10px;margin-bottom:12px;}
+.avg-kpi{
+  flex:1;background:var(--blue-pale);border-radius:8px;
+  padding:10px 12px;text-align:center;
+}
+.avg-kpi-label{font-family:var(--font);font-size:9px;color:var(--blue-mid);text-transform:uppercase;letter-spacing:.07em;margin-bottom:4px;font-weight:600;}
+.avg-kpi-val{font-family:var(--font);font-size:18px;font-weight:900;color:var(--blue-dark);}
+
+/* ── Segment legend ── */
+.seg-legend{display:flex;gap:14px;margin-top:10px;font-family:var(--font);font-size:10px;color:var(--muted);}
+.seg-legend span{display:flex;align-items:center;gap:4px;}
+.seg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+
+/* ── Heatmap ── */
+.heatmap-wrap{overflow-x:auto;}
+.heatmap-table{border-collapse:collapse;width:100%;font-family:var(--font);font-size:11px;}
+.heatmap-table th{
+  font-family:var(--font);font-size:9px;color:var(--muted);font-weight:600;
+  padding:5px 4px;text-align:center;border:1px solid var(--border);
+  white-space:nowrap;max-width:64px;overflow:hidden;text-overflow:ellipsis;
+  background:#f8fafc;
+}
+.heatmap-table td{
+  font-family:var(--font);
+  padding:9px 4px;text-align:center;font-size:11px;font-weight:700;
+  border:1px solid var(--border);min-width:54px;
+}
+.heatmap-table .seg-label{
+  font-family:var(--font);
+  text-align:left;font-size:10px;color:var(--muted);font-weight:600;
+  white-space:nowrap;padding:6px 10px;background:#f8fafc;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ KPI HERO ══ -->
+<div class="kpi-hero">
+  <div class="kpi-hero-left">
+    <div style="font-family:var(--font);font-size:18px;font-weight:900;color:#ffffff;letter-spacing:.06em;text-transform:uppercase;margin-bottom:2px;display:flex;align-items:center;gap:10px;">
+      <span style="display:inline-block;background:linear-gradient(135deg,#64b5f6,#fff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">Sample Superstore</span>
+    </div>
+    <h1 style="font-size:20px;color:rgba(255,255,255,0.85);font-weight:600;letter-spacing:.01em;">2014～2017 美國零售銷售利潤分析</h1>
+    <div class="kpi-cards">
+      <div class="kpi-card">
+        <div class="kpi-card-label">總銷售額</div>
+        <div class="kpi-card-val" id="kv-sales">$2.30M</div>
+        <div class="kpi-card-sub">累計銷售金額（USD）</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">總利潤</div>
+        <div class="kpi-card-val" id="kv-profit">$286K</div>
+        <div class="kpi-card-sub" id="kv-margin">利潤率 12.5%（USD）</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">平均折扣</div>
+        <div class="kpi-card-val">0.156</div>
+        <div class="kpi-card-sub">全品類平均</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-card-label">銷售量</div>
+        <div class="kpi-card-val">37,873</div>
+        <div class="kpi-card-sub">件商品售出</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="year-filter-wrap">
+    <div class="year-filter-title">篩選年份</div>
+    <div class="year-btns" id="yearBtns">
+      <div class="yr-btn active" data-year="all">
+        <span class="yr-check"></span> 全部
+      </div>
+      <div class="yr-btn active" data-year="2014">
+        <span class="yr-check"></span> 2014
+      </div>
+      <div class="yr-btn active" data-year="2015">
+        <span class="yr-check"></span> 2015
+      </div>
+      <div class="yr-btn active" data-year="2016">
+        <span class="yr-check"></span> 2016
+      </div>
+      <div class="yr-btn active" data-year="2017">
+        <span class="yr-check"></span> 2017
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN GRID ══ -->
+<div class="main-grid">
+
+  <!-- Left: Monthly Profit -->
+  <div class="panel">
+    <div class="panel-title">整體銷售數據 — 月度利潤（USD）</div>
+    <div id="monthlyWrap"></div>
+  </div>
+
+  <!-- Center: Map -->
+  <div class="panel">
+    <div class="panel-title">各州利潤</div>
+    <div id="mapContainer" style="width:100%;min-height:290px;"></div>
+    <div class="map-legend">
+      <span>虧損</span>
+      <div class="map-legend-bar" style="background:linear-gradient(to right,#e53935,#fff5f5,#bbdefb,#0d47a1);"></div>
+      <span>高利潤</span>
+    </div>
+  </div>
+
+  <!-- Right: Scatter -->
+  <div class="panel">
+    <div class="panel-title">折扣與利潤（USD）</div>
+    <div class="scatter-legend">
+      <span><span class="scatter-dot" style="background:#0d47a1;"></span> 高利潤</span>
+      <span><span class="scatter-dot" style="background:#90caf9;"></span> 低利潤</span>
+      <span><span class="scatter-dot" style="background:#e53935;opacity:.8"></span> 虧損</span>
+    </div>
+    <div style="position:relative;height:300px;">
+      <canvas id="scatterChart"></canvas>
+    </div>
+    <div style="font-family:var(--font);font-size:10px;color:var(--muted);text-align:center;margin-top:6px;">← 平均折扣率 →</div>
+  </div>
+
+</div>
+
+<!-- ══ BOTTOM GRID ══ -->
+<div class="bottom-grid">
+
+  <!-- Segment -->
+  <div class="panel">
+    <div class="panel-title">買家分類 — 各分群利潤（USD）</div>
+    <div style="position:relative;height:170px;">
+      <canvas id="segChart"></canvas>
+    </div>
+    <div class="seg-legend">
+      <span><span class="seg-dot" style="background:#1565c0;"></span>一般消費者</span>
+      <span><span class="seg-dot" style="background:#f59e0b;"></span>企業客戶</span>
+      <span><span class="seg-dot" style="background:#7c3aed;"></span>家庭辦公室</span>
+    </div>
+  </div>
+
+  <!-- Avg Profit Panel -->
+  <div class="panel">
+    <div class="panel-title">平均利潤（USD）</div>
+    <div class="avg-kpi-row">
+      <div class="avg-kpi">
+        <div class="avg-kpi-label">每單平均利潤（USD）</div>
+        <div class="avg-kpi-val" id="avg-order">$57.2</div>
+      </div>
+      <div class="avg-kpi">
+        <div class="avg-kpi-label">年均利潤（USD）</div>
+        <div class="avg-kpi-val" id="avg-year">$71.6K</div>
+      </div>
+    </div>
+    <div style="position:relative;height:130px;">
+      <canvas id="avgProfitChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Heatmap -->
+  <div class="panel">
+    <div class="panel-title">商品平均利潤（子類別 × 分群）— USD</div>
+    <div class="heatmap-wrap">
+      <table class="heatmap-table" id="heatTable"></table>
+    </div>
+
+    <!-- 趨勢圖例 -->
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px;">
+      <div style="font-family:var(--font);font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">趨勢判斷說明（由佳至差）</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        <div style="display:flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#1b5e20;">
+          <span>📈</span><span>↑ 高利潤明星</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#2e7d32;">
+          <span>📈</span><span>↑ 穩健高利</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #a5d6a7;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#2e7d32;">
+          <span>📈</span><span>↑ 小額高利</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #c8e6c9;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#388e3c;">
+          <span>📈</span><span>↑ 穩定成長</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #c8e6c9;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#388e3c;">
+          <span>📈</span><span>↑ 銷售王者</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#e8f5e9;border:1px solid #c8e6c9;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#388e3c;">
+          <span>📈</span><span>↑ 緩步上升</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#fff8e1;border:1px solid #ffe082;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#f57f17;">
+          <span>➡️</span><span>→ 量小穩定</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#fff8e1;border:1px solid #ffe082;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#f57f17;">
+          <span>➡️</span><span>→ 持平</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#fff8e1;border:1px solid #ffe082;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#f57f17;">
+          <span>➡️</span><span>→ 普通</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#fff8e1;border:1px solid #ffe082;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#e65100;">
+          <span>➡️</span><span>→ 毛利偏低</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#fff3e0;border:1px solid #ffcc80;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#e65100;">
+          <span>⚠️</span><span>↓ 幾乎無利</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;background:#ffebee;border:1px solid #ef9a9a;border-radius:20px;padding:4px 12px;font-family:var(--font);font-size:11px;font-weight:600;color:#c62828;">
+          <span>⚠️</span><span>↓ 持續虧損</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   DATA
+═══════════════════════════════════════ */
+const ALL_DATA = {
+  monthly:{
+    '2014':{'1月':14237,'2月':4520,'3月':55691,'4月':28295,'5月':23648,'6月':34595,'7月':33946,'8月':27909,'9月':81777,'10月':31453,'11月':78629,'12月':69546},
+    '2015':{'1月':18174,'2月':11951,'3月':38726,'4月':34195,'5月':30132,'6月':24797,'7月':28765,'8月':36898,'9月':64596,'10月':31405,'11月':75973,'12月':74920},
+    '2016':{'1月':18542,'2月':22979,'3月':51716,'4月':38750,'5月':56988,'6月':40345,'7月':39262,'8月':31115,'9月':73410,'10月':59688,'11月':79412,'12月':96999},
+    '2017':{'1月':43971,'2月':20301,'3月':58872,'4月':36522,'5月':44261,'6月':52982,'7月':45264,'8月':63121,'9月':87867,'10月':77777,'11月':118448,'12月':83829}
+  },
+  monthlyProfit:{
+    '2014':{'1月':1648,'2月':-1203,'3月':8192,'4月':3871,'5月':2946,'6月':5234,'7月':4812,'8月':3901,'9月':13562,'10月':4387,'11月':10293,'12月':8831},
+    '2015':{'1月':2203,'2月':821,'3月':5812,'4月':4963,'5月':3742,'6月':2891,'7月':4123,'8月':4987,'9月':8934,'10月':3867,'11月':11293,'12月':10921},
+    '2016':{'1月':2501,'2月':3124,'3月':7934,'4月':5812,'5月':9234,'6月':6012,'7月':5834,'8月':3912,'9月':11234,'10月':8923,'11月':12934,'12月':16234},
+    '2017':{'1月':6234,'2月':2834,'3月':9812,'4月':5234,'5月':7012,'6月':8234,'7月':7012,'8月':10234,'9月':14512,'10月':12834,'11月':19912,'12月':14012}
+  },
+  yearlyProfit:{'2014':67474,'2015':71516,'2016':96652,'2017':126856},
+  stateProfit:{
+    'California':76381,'New York':74038,'Washington':33402,'Michigan':24463,'Virginia':18598,
+    'Indiana':18382,'Georgia':16251,'Minnesota':15059,'Delaware':11882,'Pennsylvania':9485,
+    'Wisconsin':8037,'New Mexico':7978,'Louisiana':7470,'Oregon':7234,'Massachusetts':6981,
+    'Maryland':6452,'Arizona':6102,'Colorado':5983,'Missouri':5671,'Nevada':5201,
+    'Florida':2891,'Alabama':2312,'Nebraska':2134,'Iowa':1923,'Kansas':1784,
+    'Tennessee':1023,'South Carolina':812,'Connecticut':654,'New Hampshire':432,'Arkansas':234,
+    'North Carolina':-1820,'Texas':-7382,'Ohio':-14827,'Illinois':-12607
+  },
+  scatter:[
+    {disc:0.00,profit:55618,label:'影印機'},{disc:0.00,profit:44516,label:'電話'},
+    {disc:0.05,profit:41937,label:'配件'},{disc:0.02,profit:30222,label:'文件夾'},
+    {disc:0.04,profit:26590,label:'椅子'},{disc:0.03,profit:21279,label:'儲存'},
+    {disc:0.06,profit:18451,label:'家具'},{disc:0.08,profit:13600,label:'家電'},
+    {disc:0.12,profit:8200,label:'紙張'},{disc:0.15,profit:3385,label:'機器'},
+    {disc:0.10,profit:2100,label:'信封'},{disc:0.14,profit:1800,label:'標籤'},
+    {disc:0.13,profit:-800,label:'美術用品'},{disc:0.18,profit:-3200,label:'書架'},
+    {disc:0.20,profit:-9099,label:'耗材'},{disc:0.22,profit:-17725,label:'桌子'},
+    {disc:0.25,profit:-20000,label:'家具陳設'}
+  ],
+  segment:{
+    '一般消費者':{profit:134119,sales:1161401},
+    '企業客戶':{profit:91979,sales:706146},
+    '家庭辦公室':{profit:60299,sales:429653}
+  },
+  heatmap:{
+    subcats:['配件','家電','美術用品','文件夾','書架','椅子','影印機','信封','扣件','家具陳設','標籤','機器','紙張','電話','儲存'],
+    segments:['一般消費者','企業客戶','家庭辦公室'],
+    data:{
+      '一般消費者':  [54.0,39.2,8.2,20.1,-16.6,43.2,829.2,27.5,4.3,13.6,15.2,29.4,24.8,50.2,25.3],
+      '企業客戶':    [48.3,42.1,6.1,18.9,-14.2,38.7,701.5,24.3,3.8,11.9,13.4,26.1,22.1,44.8,22.6],
+      '家庭辦公室':  [51.2,37.8,7.4,21.3,-18.1,40.1,785.3,26.1,4.0,12.7,14.8,27.9,23.5,47.6,24.1]
+    }
+  }
+};
+
+/* ═══════════════════════════════════════
+   YEAR FILTER
+═══════════════════════════════════════ */
+let activeYears = new Set(['2014','2015','2016','2017']);
+
+document.getElementById('yearBtns').addEventListener('click', e => {
+  const btn = e.target.closest('.yr-btn');
+  if(!btn) return;
+  const y = btn.dataset.year;
+  const btns = document.querySelectorAll('.yr-btn[data-year]:not([data-year="all"])');
+  if(y === 'all'){
+    const allActive = activeYears.size === 4;
+    if(allActive){
+      activeYears.clear();
+      document.querySelectorAll('.yr-btn').forEach(b=>b.classList.remove('active'));
+    } else {
+      activeYears = new Set(['2014','2015','2016','2017']);
+      document.querySelectorAll('.yr-btn').forEach(b=>b.classList.add('active'));
+    }
+  } else {
+    if(activeYears.has(y)){ activeYears.delete(y); btn.classList.remove('active'); }
+    else { activeYears.add(y); btn.classList.add('active'); }
+    const allBtn = document.querySelector('.yr-btn[data-year="all"]');
+    allBtn.classList.toggle('active', activeYears.size===4);
+  }
+  renderAll();
+});
+
+/* ═══════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════ */
+const FONT = "'Noto Sans TC', system-ui, sans-serif";
+function fmt(n){ return (n>=0?'$':'-$')+Math.abs(Math.round(n)).toLocaleString(); }
+
+/* ═══════════════════════════════════════
+   MONTHLY BARS
+═══════════════════════════════════════ */
+function renderMonthly(){
+  const MOS = ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'];
+  const rows = [];
+  ['2014','2015','2016','2017'].forEach(y=>{
+    if(!activeYears.has(y)) return;
+    MOS.forEach(m=>rows.push({label:y+' '+m, profit:ALL_DATA.monthlyProfit[y][m]}));
+  });
+  const MAX = Math.max(...rows.map(d=>Math.abs(d.profit)));
+  const TRACK=210, ZERO=TRACK*0.27;
+  const c = document.getElementById('monthlyWrap');
+  c.innerHTML='';
+  rows.forEach(d=>{
+    const pos = d.profit>=0;
+    const bw = (Math.abs(d.profit)/MAX)*(TRACK-ZERO-4);
+    const bl = pos ? ZERO : ZERO-bw;
+    const div = document.createElement('div');
+    div.className='bar-row';
+    div.innerHTML=`
+      <span class="bar-label">${d.label}</span>
+      <div class="bar-track" style="width:${TRACK}px;min-width:${TRACK}px;">
+        <div class="bar-zero" style="left:${ZERO}px;"></div>
+        <div class="bar-fill" style="width:${bw}px;left:${bl}px;
+          background:${pos?'linear-gradient(90deg,#42a5f5,#0d47a1)':'linear-gradient(90deg,#ef9a9a,#c62828)'};
+        "></div>
+        <span class="bar-val" style="${pos?'left:'+(ZERO+bw+3)+'px':'right:'+(TRACK-bl+3)+'px'};
+          color:${pos?'#1565c0':'#c62828'};">
+          ${pos?'+':''}${(d.profit/1000).toFixed(1)}K
+        </span>
+      </div>`;
+    c.appendChild(div);
+  });
+
+  // Update KPIs
+  const ts = [...activeYears].reduce((s,y)=>s+Object.values(ALL_DATA.monthly[y]).reduce((a,b)=>a+b,0),0);
+  const tp = [...activeYears].reduce((s,y)=>s+Object.values(ALL_DATA.monthlyProfit[y]).reduce((a,b)=>a+b,0),0);
+  document.getElementById('kv-sales').textContent = ts>=1e6 ? '$'+(ts/1e6).toFixed(2)+'M' : '$'+Math.round(ts).toLocaleString();
+  document.getElementById('kv-profit').textContent = tp>=1e3 ? '$'+(tp/1000).toFixed(0)+'K' : fmt(tp);
+  document.getElementById('kv-margin').textContent = '利潤率 '+(tp/ts*100).toFixed(1)+'%';
+
+  // Avg profit
+  const orders = [...activeYears].reduce((s,y)=>s+(y==='2014'?1260:y==='2015'?1200:y==='2016'?1300:y==='2017'?1249:0),0);
+  document.getElementById('avg-order').textContent = orders>0 ? '$'+(tp/orders).toFixed(1) : '–';
+  document.getElementById('avg-year').textContent = activeYears.size>0 ? '$'+(tp/activeYears.size/1000).toFixed(1)+'K' : '–';
+}
+
+/* ═══════════════════════════════════════
+   MAP
+═══════════════════════════════════════ */
+let mapRendered=false;
+function renderMap(){
+  if(mapRendered) return;
+  mapRendered=true;
+  const cont = document.getElementById('mapContainer');
+  const W=cont.clientWidth||460, H=300;
+  const vals = ALL_DATA.stateProfit;
+  const maxV=Math.max(...Object.values(vals));
+  const minV=Math.min(...Object.values(vals));
+  const posScale = d3.scaleSequential([0,maxV], d3.interpolateBlues);
+  const negScale = d3.scaleSequential([0,Math.abs(minV)], v=>d3.interpolateReds(v*0.8));
+  function stateColor(v){
+    if(v==null) return '#dde2ea';
+    if(v>=0) return posScale(v);
+    return negScale(Math.abs(v));
+  }
+  const svg=d3.select('#mapContainer').append('svg')
+    .attr('viewBox',`0 0 ${W} ${H}`).attr('width','100%');
+  const proj=d3.geoAlbersUsa().scale(W*1.2).translate([W/2,H/2]);
+  const path=d3.geoPath(proj);
+  const stateNameMap = {
+    'California':'加州','New York':'紐約州','Washington':'華盛頓州','Michigan':'密西根州',
+    'Virginia':'維吉尼亞州','Indiana':'印第安納州','Georgia':'喬治亞州','Minnesota':'明尼蘇達州',
+    'Delaware':'德拉瓦州','Pennsylvania':'賓夕法尼亞州','Wisconsin':'威斯康辛州',
+    'New Mexico':'新墨西哥州','Louisiana':'路易斯安那州','Oregon':'奧勒岡州',
+    'Massachusetts':'麻薩諸塞州','Maryland':'馬里蘭州','Arizona':'亞利桑那州',
+    'Colorado':'科羅拉多州','Missouri':'密蘇里州','Nevada':'內華達州','Florida':'佛羅里達州',
+    'Alabama':'阿拉巴馬州','Nebraska':'內布拉斯加州','Iowa':'愛荷華州','Kansas':'堪薩斯州',
+    'Tennessee':'田納西州','South Carolina':'南卡羅來納州','Connecticut':'康乃狄克州',
+    'New Hampshire':'新罕布夏州','Arkansas':'阿肯色州','North Carolina':'北卡羅來納州',
+    'Texas':'德克薩斯州','Ohio':'俄亥俄州','Illinois':'伊利諾州'
+  };
+  d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(us=>{
+    svg.selectAll('path')
+      .data(topojson.feature(us,us.objects.states).features)
+      .join('path')
+      .attr('d',path)
+      .attr('fill',d=>stateColor(vals[d.properties.name]))
+      .attr('stroke','#fff').attr('stroke-width',0.6)
+      .append('title').text(d=>{
+        const en=d.properties.name;
+        const zh=stateNameMap[en]||en;
+        return zh+(vals[en]!=null?' ：'+fmt(vals[en]):'');
+      });
+  });
+}
+
+/* ═══════════════════════════════════════
+   SCATTER — blue gradient by profit level
+═══════════════════════════════════════ */
+let scatterChart;
+function renderScatter(){
+  const ctx=document.getElementById('scatterChart');
+  const pts=ALL_DATA.scatter;
+  const maxP=Math.max(...pts.filter(p=>p.profit>0).map(p=>p.profit));
+  function ptColor(p){
+    if(p.profit<0) return 'rgba(229,57,53,0.82)';
+    const t=Math.min(p.profit/maxP,1);
+    // gradient: pale blue (low) → deep blue (high)
+    const r=Math.round(144+(13-144)*t);
+    const g=Math.round(202+(71-202)*t);
+    const b=Math.round(249+(161-249)*t);
+    return `rgba(${r},${g},${b},0.88)`;
+  }
+  if(scatterChart) scatterChart.destroy();
+  scatterChart=new Chart(ctx,{
+    type:'scatter',
+    data:{datasets:[{
+      data:pts.map(p=>({x:p.disc,y:p.profit})),
+      backgroundColor:pts.map(p=>ptColor(p)),
+      pointRadius:pts.map(p=>6+Math.min(Math.abs(p.profit)/maxP*5,5)),
+      pointHoverRadius:11,borderWidth:0
+    }]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:(c)=>{
+          const p=pts[c.dataIndex];
+          return [`${p.label}`,`折扣：${(p.disc*100).toFixed(0)}%　利潤：${fmt(p.profit)}`];
+        }}}
+      },
+      scales:{
+        x:{title:{display:true,text:'平均折扣率',font:{size:10,family:FONT},color:'#999'},
+           ticks:{font:{size:9,family:FONT},color:'#999',callback:v=>(v*100).toFixed(0)+'%'},
+           grid:{color:'#eef1f6'}},
+        y:{title:{display:true,text:'利潤總和（USD）',font:{size:10,family:FONT},color:'#999'},
+           ticks:{font:{size:9,family:FONT},color:'#999',callback:v=>(v>=0?'':'-')+'$'+Math.abs(v/1000).toFixed(0)+'K'},
+           grid:{color:'#eef1f6'}}
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════
+   SEGMENT — distinct color scheme
+═══════════════════════════════════════ */
+let segChart;
+function renderSegment(){
+  const ctx=document.getElementById('segChart');
+  const segs=['一般消費者','企業客戶','家庭辦公室'];
+  if(segChart) segChart.destroy();
+  segChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:segs,
+      datasets:[{
+        data:segs.map(s=>ALL_DATA.segment[s].profit),
+        backgroundColor:['#1565c0','#f59e0b','#7c3aed'],
+        borderRadius:5,borderSkipped:false,
+        hoverBackgroundColor:['#1976d2','#fbbf24','#8b5cf6']
+      }]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>' $'+Math.round(c.raw).toLocaleString()}}},
+      scales:{
+        x:{grid:{color:'#eef1f6'},ticks:{font:{size:9,family:FONT},color:'#999',callback:v=>'$'+(v/1000).toFixed(0)+'K USD'}},
+        y:{grid:{display:false},ticks:{font:{size:11,family:FONT},color:'#333',fontWeight:'600'}}
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════
+   AVG PROFIT BY YEAR
+═══════════════════════════════════════ */
+let avgChart;
+function renderAvgProfit(){
+  const ctx=document.getElementById('avgProfitChart');
+  const years=['2014','2015','2016','2017'];
+  const active=years.filter(y=>activeYears.has(y));
+  const vals=active.map(y=>ALL_DATA.yearlyProfit[y]);
+  if(avgChart) avgChart.destroy();
+  avgChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:active,
+      datasets:[{
+        label:'年度利潤（美元）',
+        data:vals,
+        backgroundColor:active.map((_,i)=>{
+          const t=i/(active.length-1||1);
+          const r=Math.round(144+(13-144)*t);
+          const g=Math.round(202+(71-202)*t);
+          const b=Math.round(249+(161-249)*t);
+          return `rgb(${r},${g},${b})`;
+        }),
+        borderRadius:5,borderSkipped:false
+      }]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{label:c=>' $'+(c.raw/1000).toFixed(1)+'K'}}},
+      scales:{
+        x:{grid:{display:false},ticks:{font:{size:10,family:FONT},color:'#666'}},
+        y:{grid:{color:'#eef1f6'},ticks:{font:{size:9,family:FONT},color:'#999',callback:v=>'$'+(v/1000).toFixed(0)+'K'}}
+      }
+    }
+  });
+}
+
+/* ═══════════════════════════════════════
+   HEATMAP + MODAL
+═══════════════════════════════════════ */
+
+// 子類別詳細資料
+const SUBCAT_DETAIL = {
+  '配件':      {sales:167380, profit:41937, qty:2976, orders:775, margin:25.1, trend:'↑ 穩定成長'},
+  '家電':      {sales:107532, profit:18175, qty:1926, orders:465, margin:16.9, trend:'↑ 緩步上升'},
+  '美術用品':  {sales:27119,  profit:6527,  qty:1762, orders:796, margin:24.1, trend:'→ 持平'},
+  '文件夾':    {sales:203413, profit:30222, qty:5974, orders:1523,margin:14.9, trend:'↑ 穩定成長'},
+  '書架':      {sales:114880, profit:-3473, qty:868,  orders:228, margin:-3.0, trend:'↓ 持續虧損'},
+  '椅子':      {sales:328449, profit:26590, qty:2356, orders:617, margin:8.1,  trend:'→ 毛利偏低'},
+  '影印機':    {sales:149528, profit:55618, qty:234,  orders:68,  margin:37.2, trend:'↑ 高利潤明星'},
+  '信封':      {sales:16476,  profit:6964,  qty:2389, orders:1121,margin:42.3, trend:'↑ 小額高利'},
+  '扣件':      {sales:3024,   profit:950,   qty:914,  orders:217, margin:31.4, trend:'→ 量小穩定'},
+  '家具陳設':  {sales:91705,  profit:13059, qty:2624, orders:957, margin:14.2, trend:'→ 普通'},
+  '標籤':      {sales:12486,  profit:5546,  qty:1400, orders:665, margin:44.4, trend:'↑ 高利潤率'},
+  '機器':      {sales:189239, profit:3385,  qty:465,  orders:115, margin:1.8,  trend:'↓ 幾乎無利'},
+  '紙張':      {sales:78479,  profit:34053, qty:5178, orders:2435,margin:43.4, trend:'↑ 穩健高利'},
+  '電話':      {sales:330007, profit:44516, qty:3289, orders:889, margin:13.5, trend:'↑ 銷售王者'},
+  '儲存':      {sales:223844, profit:21279, qty:3158, orders:846, margin:9.5,  trend:'→ 量大薄利'},
+};
+
+function renderHeatmap(){
+  const {subcats,segments,data}=ALL_DATA.heatmap;
+  const allVals=segments.flatMap(s=>data[s]);
+  const maxV=Math.max(...allVals.filter(v=>v>0));
+  const minV=Math.min(...allVals.filter(v=>v<0));
+  function cellBg(v){
+    if(v>0){const t=Math.min(v/maxV,1);return `rgba(21,101,192,${0.1+t*0.82})`;}
+    else{const t=Math.min(Math.abs(v)/Math.abs(minV),1);return `rgba(229,57,53,${0.1+t*0.75})`;}
+  }
+  function cellText(v){
+    const alpha=v>0?0.1+(Math.min(v/maxV,1))*0.82:0.1+(Math.min(Math.abs(v)/Math.abs(minV),1))*0.75;
+    if(alpha>0.48) return '#fff';
+    return v>0?'#0d47a1':'#b71c1c';
+  }
+  const tbl=document.getElementById('heatTable');
+  let html='<thead><tr><th class="seg-label">客群</th>';
+  subcats.forEach(s=>{html+=`<th title="${s}" style="cursor:pointer;" onclick="showSubcatModal('${s}')">${s.length>4?s.slice(0,4)+'…':s}</th>`;});
+  html+='</tr></thead><tbody>';
+  segments.forEach(seg=>{
+    html+=`<tr><td class="seg-label">${seg}</td>`;
+    data[seg].forEach((v,i)=>{
+      const sc=subcats[i];
+      html+=`<td
+        style="background:${cellBg(v)};color:${cellText(v)};cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,outline .1s ease;position:relative;"
+        onclick="showSubcatModal('${sc}','${seg}',${v})"
+        onmouseenter="
+          this.style.transform='scale(1.2)';
+          this.style.boxShadow='0 4px 18px rgba(0,0,0,.30)';
+          this.style.zIndex=20;
+          this.style.outline='2.5px solid #fff';
+          this.style.borderRadius='3px';
+          var tip=document.getElementById('heat-tip');
+          var r=this.getBoundingClientRect();
+          tip.style.display='block';
+          tip.style.top=(r.bottom+window.scrollY+5)+'px';
+          tip.style.left=(r.left+window.scrollX+r.width/2)+'px';
+        "
+        onmouseleave="
+          this.style.transform='';
+          this.style.boxShadow='';
+          this.style.zIndex='';
+          this.style.outline='';
+          this.style.borderRadius='';
+          document.getElementById('heat-tip').style.display='none';
+        "
+      >${v.toFixed(1)}</td>`;
+    });
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+}
+
+/* ── Modal ── */
+function showSubcatModal(subcat, seg, val){
+  const d = SUBCAT_DETAIL[subcat];
+  if(!d) return;
+  const isProfit = d.profit >= 0;
+  const profitColor = isProfit ? '#1565c0' : '#e53935';
+  const segInfo = seg ? `<div style="display:inline-block;background:rgba(21,101,192,0.1);border:1px solid rgba(21,101,192,0.2);border-radius:20px;padding:3px 12px;font-size:11px;color:#1565c0;margin-bottom:16px;">📊 ${seg} — 平均利潤 ${val !== undefined ? val.toFixed(1) : '–'}</div>` : '';
+
+  document.getElementById('modal-overlay').style.display='flex';
+  document.getElementById('modal-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;">
+      <div>
+        <div style="font-size:11px;color:#7a8299;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">子類別詳情</div>
+        <div style="font-size:22px;font-weight:900;color:#0d1b3e;">${subcat}</div>
+      </div>
+      <button onclick="closeModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#aaa;line-height:1;padding:4px;">✕</button>
+    </div>
+    ${segInfo}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="background:#f0f4ff;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;color:#7a8299;margin-bottom:4px;text-transform:uppercase;letter-spacing:.07em;">總銷售額</div>
+        <div style="font-size:20px;font-weight:800;color:#0d1b3e;">$${(d.sales/1000).toFixed(0)}K</div>
+      </div>
+      <div style="background:${isProfit?'#f0f4ff':'#fff0f0'};border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;color:#7a8299;margin-bottom:4px;text-transform:uppercase;letter-spacing:.07em;">總利潤</div>
+        <div style="font-size:20px;font-weight:800;color:${profitColor};">${d.profit>=0?'+':''} $${(d.profit/1000).toFixed(1)}K</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;color:#7a8299;margin-bottom:4px;text-transform:uppercase;letter-spacing:.07em;">銷售量</div>
+        <div style="font-size:20px;font-weight:800;color:#0d1b3e;">${d.qty.toLocaleString()} 件</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:12px 14px;">
+        <div style="font-size:10px;color:#7a8299;margin-bottom:4px;text-transform:uppercase;letter-spacing:.07em;">訂單數</div>
+        <div style="font-size:20px;font-weight:800;color:#0d1b3e;">${d.orders.toLocaleString()} 筆</div>
+      </div>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:11px;color:#7a8299;text-transform:uppercase;letter-spacing:.07em;">利潤率</span>
+        <span style="font-size:15px;font-weight:800;color:${profitColor};">${d.margin}%</span>
+      </div>
+      <div style="background:#e0e7ef;border-radius:4px;height:8px;overflow:hidden;">
+        <div style="width:${Math.min(Math.abs(d.margin),100)}%;height:100%;background:${isProfit?'linear-gradient(90deg,#64b5f6,#1565c0)':'#e53935'};border-radius:4px;"></div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;background:${isProfit?'#e8f5e9':'#fff3e0'};border-radius:8px;padding:10px 14px;">
+      <span style="font-size:18px;">${isProfit?'📈':'⚠️'}</span>
+      <div>
+        <div style="font-size:10px;color:#7a8299;margin-bottom:2px;">趨勢判斷</div>
+        <div style="font-size:13px;font-weight:700;color:${isProfit?'#2e7d32':'#e65100'};">${d.trend}</div>
+      </div>
+    </div>
+  `;
+}
+
+function closeModal(){
+  document.getElementById('modal-overlay').style.display='none';
+}
+
+/* ═══════════════════════════════════════
+   RENDER ALL
+═══════════════════════════════════════ */
+function renderAll(){
+  renderMonthly();
+  renderMap();
+  renderScatter();
+  renderSegment();
+  renderAvgProfit();
+  renderHeatmap();
+}
+renderAll();
+</script>
+<!-- ══ HEATMAP HOVER TIP ══ -->
+<div id="heat-tip" style="
+  display:none;
+  position:absolute;
+  transform:translateX(-50%);
+  background:rgba(13,27,62,0.88);
+  color:#fff;
+  font-family:'Noto Sans TC',system-ui,sans-serif;
+  font-size:10px;
+  font-weight:600;
+  letter-spacing:.04em;
+  padding:4px 10px;
+  border-radius:20px;
+  white-space:nowrap;
+  pointer-events:none;
+  z-index:999;
+  box-shadow:0 2px 8px rgba(0,0,0,.25);
+">🔍 點擊查看更多</div>
+
+<!-- ══ MODAL OVERLAY ══ -->
+<div id="modal-overlay" style="
+  display:none;position:fixed;inset:0;
+  background:rgba(13,27,62,0.55);backdrop-filter:blur(3px);
+  z-index:999;align-items:center;justify-content:center;
+" onclick="if(event.target===this)closeModal()">
+  <div id="modal-content" style="
+    background:#fff;border-radius:16px;
+    padding:24px;width:100%;max-width:400px;
+    box-shadow:0 20px 60px rgba(0,0,0,.25);
+    font-family:'Noto Sans TC',system-ui,sans-serif;
+    animation:modalIn .18s ease;
+  "></div>
+</div>
+<style>
+@keyframes modalIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:none}}
+.heatmap-table td:not(.seg-label):hover{outline:2px solid #1565c0;}
+</style>
+
+</body>
+</html>
